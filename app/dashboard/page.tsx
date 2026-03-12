@@ -24,6 +24,9 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { MarkdownContent } from "@/components/markdown-content"
+import { ChatActionButtons, type ActionType } from "@/components/chat-action-buttons"
+import { DocViewer, DocWizard, type DocData } from "@/components/doc-viewer"
+import { SlidesViewer, SlidesWizard, type Slide, type SlidesData } from "@/components/slides-viewer"
 
 interface Message {
   id: string
@@ -94,6 +97,13 @@ export default function DashboardPage() {
   const [activeSources, setActiveSources] = useState<Source[]>([])
   const [plusMenuOpen, setPlusMenuOpen] = useState(false)
   const [searchMode, setSearchMode] = useState<"none" | "web" | "deep" | "think">("none")
+  const [activeAction, setActiveAction] = useState<ActionType | null>(null)
+  const [docWizardOpen, setDocWizardOpen] = useState(false)
+  const [slidesWizardOpen, setSlidesWizardOpen] = useState(false)
+  const [isGeneratingDoc, setIsGeneratingDoc] = useState(false)
+  const [isGeneratingSlides, setIsGeneratingSlides] = useState(false)
+  const [generatedDoc, setGeneratedDoc] = useState<DocData | null>(null)
+  const [generatedSlides, setGeneratedSlides] = useState<SlidesData | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const plusMenuRef = useRef<HTMLDivElement>(null)
@@ -671,6 +681,139 @@ export default function DashboardPage() {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
       handleSubmit()
+    }
+  }
+
+  // Handle action button clicks (kimi-style)
+  const handleActionClick = (action: ActionType) => {
+    setActiveAction(action === activeAction ? null : action)
+    
+    switch (action) {
+      case "docs":
+        setDocWizardOpen(true)
+        break
+      case "slides":
+        setSlidesWizardOpen(true)
+        break
+      case "deep-research":
+        setSearchMode("deep")
+        textareaRef.current?.focus()
+        break
+      case "websites":
+        setInputValue("Help me build a website for ")
+        textareaRef.current?.focus()
+        break
+      case "sheets":
+        setInputValue("Create a spreadsheet or data table for ")
+        textareaRef.current?.focus()
+        break
+      case "agent-swarm":
+        setInputValue("Use agent swarm to help me with ")
+        textareaRef.current?.focus()
+        break
+    }
+  }
+
+  // Generate document (kimi-style)
+  const handleGenerateDoc = async (data: { topic: string; audience: string; style: string }) => {
+    setIsGeneratingDoc(true)
+    setDocWizardOpen(false)
+    
+    try {
+      const response = await fetch("/api/generate-doc", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      })
+      
+      if (!response.ok) throw new Error("Failed to generate document")
+      
+      const docData = await response.json()
+      setGeneratedDoc(docData)
+      
+      // Add message to chat
+      const userMessage: Message = {
+        id: crypto.randomUUID(),
+        role: "user",
+        content: `Create a document about "${data.topic}"${data.audience ? ` for ${data.audience}` : ""}`,
+        timestamp: new Date(),
+      }
+      
+      const assistantMessage: Message = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: `I've created a professional document about "${data.topic}". You can view it below, copy sections, or download it as PDF or DOCX.`,
+        timestamp: new Date(),
+        status: "completed",
+      }
+      
+      setMessages(prev => [...prev, userMessage, assistantMessage])
+    } catch (error) {
+      console.error("Error generating document:", error)
+    } finally {
+      setIsGeneratingDoc(false)
+    }
+  }
+
+  // Generate slides (kimi-style)
+  const handleGenerateSlides = async (data: { topic: string; audience: string; slideCount: string; style: string }) => {
+    setIsGeneratingSlides(true)
+    setSlidesWizardOpen(false)
+    
+    try {
+      const response = await fetch("/api/generate-slides", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      })
+      
+      if (!response.ok) throw new Error("Failed to generate slides")
+      
+      const slidesData = await response.json()
+      
+      const styleColors = {
+        professional: { bg: "#1e293b", text: "#ffffff" },
+        creative: { bg: "#7c3aed", text: "#ffffff" },
+        minimal: { bg: "#ffffff", text: "#1e293b" },
+        dark: { bg: "#0f172a", text: "#e2e8f0" },
+      }
+      const colors = styleColors[data.style as keyof typeof styleColors] || styleColors.professional
+      
+      const slides: Slide[] = slidesData.slides.map((slide: { title: string; content: string[] }) => ({
+        id: crypto.randomUUID(),
+        title: slide.title,
+        content: slide.content,
+        backgroundColor: colors.bg,
+        textColor: colors.text,
+      }))
+      
+      setGeneratedSlides({
+        topic: data.topic,
+        slides,
+        style: data.style as SlidesData["style"],
+      })
+      
+      // Add message to chat
+      const userMessage: Message = {
+        id: crypto.randomUUID(),
+        role: "user",
+        content: `Create a ${data.slideCount}-slide presentation about "${data.topic}"${data.audience ? ` for ${data.audience}` : ""}`,
+        timestamp: new Date(),
+      }
+      
+      const assistantMessage: Message = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: `I've created a ${slides.length}-slide presentation about "${data.topic}". You can view it below, navigate through slides, present in fullscreen, or download it as PPTX.`,
+        timestamp: new Date(),
+        status: "completed",
+      }
+      
+      setMessages(prev => [...prev, userMessage, assistantMessage])
+    } catch (error) {
+      console.error("Error generating slides:", error)
+    } finally {
+      setIsGeneratingSlides(false)
     }
   }
 
@@ -1291,9 +1434,16 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* Action Buttons (Kimi-style) */}
+        <ChatActionButtons 
+          onAction={handleActionClick}
+          activeAction={activeAction}
+          className="mt-6"
+        />
+
         {/* Tools Connection Bar */}
         {showToolsBar && (
-          <div className="mt-2 flex items-center justify-between rounded-lg border border-border bg-card px-4 py-2">
+          <div className="mt-4 flex items-center justify-between rounded-lg border border-border bg-card px-4 py-2">
             <div className="flex items-center gap-2">
               <ConnectIcon />
               <span className="text-sm text-muted-foreground">Connected tools</span>
@@ -1314,8 +1464,43 @@ export default function DashboardPage() {
           </div>
         )}
 
-
       </div>
+
+      {/* Document Wizard */}
+      <DocWizard 
+        isOpen={docWizardOpen}
+        onClose={() => setDocWizardOpen(false)}
+        onGenerate={handleGenerateDoc}
+        isGenerating={isGeneratingDoc}
+      />
+
+      {/* Slides Wizard */}
+      <SlidesWizard
+        isOpen={slidesWizardOpen}
+        onClose={() => setSlidesWizardOpen(false)}
+        onGenerate={handleGenerateSlides}
+        isGenerating={isGeneratingSlides}
+      />
+
+      {/* Generated Document Display */}
+      {generatedDoc && (
+        <div className="fixed bottom-4 right-4 z-40 w-full max-w-xl">
+          <DocViewer 
+            doc={generatedDoc}
+            onClose={() => setGeneratedDoc(null)}
+          />
+        </div>
+      )}
+
+      {/* Generated Slides Display */}
+      {generatedSlides && (
+        <div className="fixed bottom-4 right-4 z-40 w-full max-w-xl">
+          <SlidesViewer 
+            data={generatedSlides}
+            onClose={() => setGeneratedSlides(null)}
+          />
+        </div>
+      )}
     </div>
   )
 }

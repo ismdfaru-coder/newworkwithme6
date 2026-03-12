@@ -8,14 +8,10 @@ import {
   PenSquare,
   Bot,
   Search,
-  Library,
-  Plus,
-  FolderPlus,
   Settings,
   LayoutGrid,
   Smartphone,
   Monitor,
-  ListFilter,
   Copy,
 } from "lucide-react"
 
@@ -33,7 +29,6 @@ export function DashboardSidebar({ collapsed, onToggle, onOpenSettings, onOpenSe
     { icon: PenSquare, label: "New Chat", href: "/dashboard", shortcut: null, action: null },
     { icon: Bot, label: "Agents", href: "/dashboard/agents", shortcut: null, action: null },
     { icon: Search, label: "Search", href: null, shortcut: "CtrlK", action: onOpenSearch },
-    { icon: Library, label: "Library", href: "/dashboard/library", shortcut: null, action: null },
   ]
 
   return (
@@ -114,46 +109,7 @@ export function DashboardSidebar({ collapsed, onToggle, onOpenSettings, onOpenSe
           })}
         </div>
 
-        {/* Projects Section */}
-        {!collapsed && (
-          <div className="mt-6">
-            <div className="flex items-center justify-between px-3 py-2">
-              <span className="text-xs font-medium text-muted-foreground">Projects</span>
-              <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground">
-                <Plus className="h-3 w-3" />
-              </Button>
-            </div>
-            <Link
-              href="#"
-              className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted/50"
-            >
-              <FolderPlus className="h-5 w-5" />
-              <span>New project</span>
-            </Link>
-          </div>
-        )}
 
-        {/* All Tasks */}
-        {!collapsed && (
-          <div className="mt-4">
-            <div className="flex items-center justify-between px-3 py-2">
-              <span className="text-xs font-medium text-muted-foreground">All tasks</span>
-              <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground">
-                <ListFilter className="h-3 w-3" />
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Empty State */}
-        {!collapsed && (
-          <div className="mt-8 flex flex-col items-center px-4 text-center">
-            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/30">
-              <div className="h-6 w-6 rounded border-2 border-dashed border-muted-foreground/30" />
-            </div>
-            <p className="text-sm text-muted-foreground">Create a new task to get started</p>
-          </div>
-        )}
       </nav>
 
       {/* Bottom Section */}

@@ -7,8 +7,6 @@ import {
   ArrowUp,
   Presentation, 
   Globe, 
-  Smartphone, 
-  Paintbrush,
   Smile,
   Mic,
   X,
@@ -27,6 +25,9 @@ import {
   Play,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { ChatActionButtons, type ActionType } from "@/components/chat-action-buttons"
+import { DocViewer, DocWizard, type DocData } from "@/components/doc-viewer"
+import { SlidesViewer, SlidesWizard, type SlidesData } from "@/components/slides-viewer"
 
 interface Slide {
   id: string
@@ -176,18 +177,18 @@ export default function AgentsPage() {
   const [generatedSlides, setGeneratedSlides] = useState<Slide[]>([])
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [activeAction, setActiveAction] = useState<ActionType | null>(null)
+  const [docWizardOpen, setDocWizardOpen] = useState(false)
+  const [newSlidesWizardOpen, setNewSlidesWizardOpen] = useState(false)
+  const [isGeneratingDoc, setIsGeneratingDoc] = useState(false)
+  const [isGeneratingNewSlides, setIsGeneratingNewSlides] = useState(false)
+  const [generatedDocData, setGeneratedDocData] = useState<DocData | null>(null)
+  const [generatedSlidesData, setGeneratedSlidesData] = useState<SlidesData | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
-  const quickActions = [
-    { icon: Presentation, label: "Create slides" },
-    { icon: Globe, label: "Build website" },
-    { icon: Smartphone, label: "Develop apps" },
-    { icon: Paintbrush, label: "Design" },
-  ]
-
-  const scrollToBottom = () => {
+const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }
 
@@ -475,21 +476,135 @@ export default function AgentsPage() {
     }
   }
 
-  const handleQuickAction = (action: string) => {
-    if (action === "Create slides") {
-      setSlideMode("wizard")
-      setSlideWizardStep(0)
-      setSlideDetails({ topic: "", audience: "", slideCount: "5", style: "professional" })
-      return
+  // Handle action button clicks (kimi-style)
+  const handleActionClick = (action: ActionType) => {
+    setActiveAction(action === activeAction ? null : action)
+    
+    switch (action) {
+      case "docs":
+        setDocWizardOpen(true)
+        break
+      case "slides":
+        setNewSlidesWizardOpen(true)
+        break
+      case "deep-research":
+        setInputValue("Do deep research on ")
+        textareaRef.current?.focus()
+        break
+      case "websites":
+        setInputValue("Build a website for ")
+        textareaRef.current?.focus()
+        break
+      case "sheets":
+        setInputValue("Create a spreadsheet or data table for ")
+        textareaRef.current?.focus()
+        break
+      case "agent-swarm":
+        setInputValue("Use agent swarm to help me with ")
+        textareaRef.current?.focus()
+        break
     }
-    // For other quick actions, set the input and focus
-    const prompts: Record<string, string> = {
-      "Build website": "Help me build a website",
-      "Develop apps": "Help me develop an app",
-      "Design": "Help me design",
+  }
+
+  // Generate document (kimi-style)
+  const handleGenerateDoc = async (data: { topic: string; audience: string; style: string }) => {
+    setIsGeneratingDoc(true)
+    setDocWizardOpen(false)
+    
+    try {
+      const response = await fetch("/api/generate-doc", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      })
+      
+      if (!response.ok) throw new Error("Failed to generate document")
+      
+      const docData = await response.json()
+      setGeneratedDocData(docData)
+      
+      const userMessage: Message = {
+        id: crypto.randomUUID(),
+        role: "user",
+        content: `Create a document about "${data.topic}"${data.audience ? ` for ${data.audience}` : ""}`,
+        timestamp: new Date(),
+      }
+      
+      const assistantMessage: Message = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: `I've created a professional document about "${data.topic}". You can view it below, copy sections, or download it as PDF or DOCX.`,
+        timestamp: new Date(),
+        status: "completed",
+      }
+      
+      setMessages(prev => [...prev, userMessage, assistantMessage])
+    } catch (error) {
+      console.error("Error generating document:", error)
+    } finally {
+      setIsGeneratingDoc(false)
     }
-    setInputValue(prompts[action] || action)
-    textareaRef.current?.focus()
+  }
+
+  // Generate slides (kimi-style)
+  const handleGenerateNewSlides = async (data: { topic: string; audience: string; slideCount: string; style: string }) => {
+    setIsGeneratingNewSlides(true)
+    setNewSlidesWizardOpen(false)
+    
+    try {
+      const response = await fetch("/api/generate-slides", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      })
+      
+      if (!response.ok) throw new Error("Failed to generate slides")
+      
+      const slidesResponse = await response.json()
+      
+      const styleColors = {
+        professional: { bg: "#1e293b", text: "#ffffff" },
+        creative: { bg: "#7c3aed", text: "#ffffff" },
+        minimal: { bg: "#ffffff", text: "#1e293b" },
+        dark: { bg: "#0f172a", text: "#e2e8f0" },
+      }
+      const colors = styleColors[data.style as keyof typeof styleColors] || styleColors.professional
+      
+      const slides: Slide[] = slidesResponse.slides.map((slide: { title: string; content: string[] }) => ({
+        id: crypto.randomUUID(),
+        title: slide.title,
+        content: slide.content,
+        backgroundColor: colors.bg,
+        textColor: colors.text,
+      }))
+      
+      setGeneratedSlidesData({
+        topic: data.topic,
+        slides,
+        style: data.style as SlidesData["style"],
+      })
+      
+      const userMessage: Message = {
+        id: crypto.randomUUID(),
+        role: "user",
+        content: `Create a ${data.slideCount}-slide presentation about "${data.topic}"${data.audience ? ` for ${data.audience}` : ""}`,
+        timestamp: new Date(),
+      }
+      
+      const assistantMessage: Message = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: `I've created a ${slides.length}-slide presentation about "${data.topic}". You can view it below, navigate through slides, present in fullscreen, or download it as PPTX.`,
+        timestamp: new Date(),
+        status: "completed",
+      }
+      
+      setMessages(prev => [...prev, userMessage, assistantMessage])
+    } catch (error) {
+      console.error("Error generating slides:", error)
+    } finally {
+      setIsGeneratingNewSlides(false)
+    }
   }
 
   const generateSlides = async () => {
@@ -1275,30 +1390,51 @@ export default function AgentsPage() {
           </div>
         )}
 
-        {/* Quick Actions */}
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-          {quickActions.map((action) => (
-            <Button
-              key={action.label}
-              variant="outline"
-              className="gap-2 rounded-full border-border bg-background hover:bg-muted"
-              onClick={() => handleQuickAction(action.label)}
-            >
-              <action.icon className="h-4 w-4" />
-              {action.label}
-            </Button>
-          ))}
-          <Button 
-            variant="outline" 
-            className="rounded-full border-border bg-background hover:bg-muted"
-            onClick={() => handleQuickAction("Find the best flights from Glasgow to Chennai")}
-          >
-            More
-          </Button>
-        </div>
+        {/* Action Buttons (Kimi-style) */}
+        <ChatActionButtons 
+          onAction={handleActionClick}
+          activeAction={activeAction}
+          className="mt-6"
+        />
       </div>
 
-      {/* Slide Creation Wizard Modal */}
+      {/* Document Wizard (Kimi-style) */}
+      <DocWizard 
+        isOpen={docWizardOpen}
+        onClose={() => setDocWizardOpen(false)}
+        onGenerate={handleGenerateDoc}
+        isGenerating={isGeneratingDoc}
+      />
+
+      {/* Slides Wizard (Kimi-style) */}
+      <SlidesWizard
+        isOpen={newSlidesWizardOpen}
+        onClose={() => setNewSlidesWizardOpen(false)}
+        onGenerate={handleGenerateNewSlides}
+        isGenerating={isGeneratingNewSlides}
+      />
+
+      {/* Generated Document Display */}
+      {generatedDocData && (
+        <div className="fixed bottom-4 right-4 z-40 w-full max-w-xl">
+          <DocViewer 
+            doc={generatedDocData}
+            onClose={() => setGeneratedDocData(null)}
+          />
+        </div>
+      )}
+
+      {/* Generated Slides Display */}
+      {generatedSlidesData && (
+        <div className="fixed bottom-4 right-4 z-40 w-full max-w-xl">
+          <SlidesViewer 
+            data={generatedSlidesData}
+            onClose={() => setGeneratedSlidesData(null)}
+          />
+        </div>
+      )}
+
+      {/* Slide Creation Wizard Modal (Legacy) */}
       {slideMode === "wizard" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-lg rounded-2xl bg-background p-6 shadow-xl">
