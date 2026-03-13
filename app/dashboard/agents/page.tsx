@@ -23,6 +23,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Play,
+  Zap,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ChatActionButtons, type ActionType } from "@/components/chat-action-buttons"
@@ -177,6 +178,7 @@ export default function AgentsPage() {
   const [generatedSlides, setGeneratedSlides] = useState<Slide[]>([])
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [turboMode, setTurboMode] = useState(false)
   const [activeAction, setActiveAction] = useState<ActionType | null>(null)
   const [docWizardOpen, setDocWizardOpen] = useState(false)
   const [newSlidesWizardOpen, setNewSlidesWizardOpen] = useState(false)
@@ -315,30 +317,92 @@ const scrollToBottom = () => {
       ]
     }
 
-    setMessages(prev => [...prev, userMessage, assistantMessage])
+setMessages(prev => [...prev, userMessage, assistantMessage])
     setInputValue("")
     setIsLoading(true)
-
+    
     try {
-      // Update to browsing status for agent mode
-      setMessages(prev => prev.map(m => 
-        m.id === assistantMessage.id 
-          ? { 
-              ...m, 
-              status: "browsing",
-              steps: [
-                ...(m.steps || []),
-                {
-                  id: crypto.randomUUID(),
-                  type: "browsing",
-                  description: "Browsing...",
-                  timestamp: new Date(),
-                }
-              ]
-            }
-          : m
-      ))
+      // TURBO MODE: Use Cerebras for ultra-fast inference
+      if (turboMode) {
+        setMessages(prev => prev.map(m => 
+          m.id === assistantMessage.id 
+            ? { 
+                ...m, 
+                status: "processing",
+                steps: [
+                  ...(m.steps || []),
+                  {
+                    id: crypto.randomUUID(),
+                    type: "browsing",
+                    description: "Turbo processing...",
+                    timestamp: new Date(),
+                  }
+                ]
+              }
+            : m
+        ))
 
+        const response = await fetch("/api/cerebras", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ 
+            prompt: userMessage.content,
+            model: "llama3.1-8b"
+          }),
+        })
+
+        const data = await response.json()
+
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to get response from Cerebras")
+        }
+
+        const content = data.output || ""
+
+        setMessages(prev => prev.map(m => 
+          m.id === assistantMessage.id 
+            ? { 
+                ...m, 
+                content,
+                status: "completed",
+                steps: [
+                  ...(m.steps || []),
+                  {
+                    id: crypto.randomUUID(),
+                    type: "complete",
+                    description: `Turbo complete${data.time_info ? ` (${(data.time_info.total_time * 1000).toFixed(0)}ms)` : ""}`,
+                    timestamp: new Date(),
+                  }
+                ]
+              }
+            : m
+        ))
+        
+        setIsLoading(false)
+        return
+      }
+
+      // Update to browsing status for agent mode
+      setMessages(prev => prev.map(m =>
+      m.id === assistantMessage.id
+      ? {
+      ...m,
+      status: "browsing",
+      steps: [
+      ...(m.steps || []),
+      {
+      id: crypto.randomUUID(),
+      type: "browsing",
+      description: "Browsing...",
+      timestamp: new Date(),
+      }
+      ]
+      }
+      : m
+      ))
+      
       const response = await fetch("/api/manus", {
         method: "POST",
         headers: {
@@ -1262,12 +1326,26 @@ const scrollToBottom = () => {
                 disabled={isLoading}
               />
 
-              <div className="flex items-center justify-between pt-2">
-                <div className="flex items-center gap-1">
+<div className="flex items-center justify-between pt-2">
+                  <div className="flex items-center gap-2">
                   <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground">
-                    <Plus className="h-4 w-4" />
+                  <Plus className="h-4 w-4" />
                   </Button>
-                </div>
+                  
+                  {/* Turbo Mode Toggle */}
+                  <button
+                  onClick={() => setTurboMode(!turboMode)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm font-medium transition-all ${
+                    turboMode 
+                      ? "border-yellow-500 bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-500/30" 
+                      : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                  title="Turbo Mode - Ultra-fast responses powered by Cerebras"
+                  >
+                  <Zap className={`h-3.5 w-3.5 ${turboMode ? "fill-yellow-500" : ""}`} />
+                  <span>Turbo</span>
+                  </button>
+                  </div>
 
                 <div className="flex items-center gap-1">
                   <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground">
@@ -1327,7 +1405,7 @@ const scrollToBottom = () => {
           />
 
           <div className="flex items-center justify-between pt-2">
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-2">
               <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground">
                 <Plus className="h-4 w-4" />
               </Button>
@@ -1337,6 +1415,20 @@ const scrollToBottom = () => {
               <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground">
                 <SettingsIcon />
               </Button>
+              
+              {/* Turbo Mode Toggle */}
+              <button
+                onClick={() => setTurboMode(!turboMode)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm font-medium transition-all ${
+                  turboMode 
+                    ? "border-yellow-500 bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-500/30" 
+                    : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
+                title="Turbo Mode - Ultra-fast responses powered by Cerebras"
+              >
+                <Zap className={`h-3.5 w-3.5 ${turboMode ? "fill-yellow-500" : ""}`} />
+                <span>Turbo</span>
+              </button>
             </div>
 
             <div className="flex items-center gap-1">

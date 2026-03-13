@@ -2,10 +2,12 @@
 
 import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { 
-  Plus, 
-  ArrowUp, 
-  Globe, 
+import {
+  Plus,
+  ArrowUp,
+  Lightbulb,
+  Globe,
+  Brain,
   Smile,
   Mic,
   X,
@@ -17,10 +19,10 @@ import {
   FileText,
   Code,
   Sparkles,
-  Image as ImageIcon,
-  Search,
-  Lightbulb,
-  BookOpen,
+  Monitor,
+  ChevronDown,
+  ChevronUp,
+  Zap,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { MarkdownContent } from "@/components/markdown-content"
@@ -97,6 +99,7 @@ export default function DashboardPage() {
   const [activeSources, setActiveSources] = useState<Source[]>([])
   const [plusMenuOpen, setPlusMenuOpen] = useState(false)
   const [searchMode, setSearchMode] = useState<"none" | "web" | "deep" | "think">("none")
+  const [turboMode, setTurboMode] = useState(false)
   const [activeAction, setActiveAction] = useState<ActionType | null>(null)
   const [docWizardOpen, setDocWizardOpen] = useState(false)
   const [slidesWizardOpen, setSlidesWizardOpen] = useState(false)
@@ -177,6 +180,68 @@ export default function DashboardPage() {
     setIsLoading(true)
 
     try {
+      // TURBO MODE: Use Cerebras for ultra-fast inference
+      if (turboMode) {
+        setMessages(prev => prev.map(m => 
+          m.id === assistantMessage.id 
+            ? { 
+                ...m, 
+                status: "processing",
+                steps: [
+                  ...(m.steps || []),
+                  {
+                    id: crypto.randomUUID(),
+                    type: "searching",
+                    description: "Turbo processing...",
+                    timestamp: new Date(),
+                  }
+                ]
+              }
+            : m
+        ))
+
+        const response = await fetch("/api/cerebras", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ 
+            prompt: userMessage.content,
+            model: "llama3.1-8b"
+          }),
+        })
+
+        const data = await response.json()
+
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to get response from Cerebras")
+        }
+
+        const content = data.output || ""
+
+        setMessages(prev => prev.map(m => 
+          m.id === assistantMessage.id 
+            ? { 
+                ...m, 
+                content,
+                status: "complete",
+                steps: [
+                  ...(m.steps || []),
+                  {
+                    id: crypto.randomUUID(),
+                    type: "complete",
+                    description: `Turbo complete${data.time_info ? ` (${(data.time_info.total_time * 1000).toFixed(0)}ms)` : ""}`,
+                    timestamp: new Date(),
+                  }
+                ]
+              }
+            : m
+        ))
+        
+        setIsLoading(false)
+        return
+      }
+
       // Use Keyplex for normal messages without special modes/keywords (faster, synchronous)
       // Only use Manus when: user selects web/deep/think mode OR uses keywords like "deep research", "web research", etc.
       if (!shouldUseManus) {
@@ -1145,26 +1210,40 @@ export default function DashboardPage() {
                     )}
                   </div>
                   
+{/* Turbo Mode Toggle */}
+                  <button
+                  onClick={() => setTurboMode(!turboMode)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm font-medium transition-all ${
+                    turboMode 
+                      ? "border-yellow-500 bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-500/30" 
+                      : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                  title="Turbo Mode - Ultra-fast responses powered by Cerebras"
+                  >
+                  <Zap className={`h-3.5 w-3.5 ${turboMode ? "fill-yellow-500" : ""}`} />
+                  <span>Turbo</span>
+                  </button>
+
                   {/* Show active mode indicator - persists until user closes it */}
                   {searchMode !== "none" && (
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-muted/50 text-foreground text-sm font-medium hover:bg-muted transition-colors">
-                      <button 
-                        onClick={() => setSearchMode("none")} 
-                        className="flex items-center justify-center hover:bg-muted-foreground/20 rounded-full p-0.5 transition-colors"
-                        aria-label="Remove mode"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                      {searchMode === "web" && <><Globe className="h-3.5 w-3.5" /><span>Web search</span></>}
-                      {searchMode === "deep" && <><Sparkles className="h-3.5 w-3.5" /><span>Deep research</span></>}
-                      {searchMode === "think" && <><Lightbulb className="h-3.5 w-3.5" /><span>Think longer</span></>}
-                    </div>
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-muted/50 text-foreground text-sm font-medium hover:bg-muted transition-colors">
+                  <button
+                  onClick={() => setSearchMode("none")}
+                  className="flex items-center justify-center hover:bg-muted-foreground/20 rounded-full p-0.5 transition-colors"
+                  aria-label="Remove mode"
+                  >
+                  <X className="h-3.5 w-3.5" />
+                  </button>
+                  {searchMode === "web" && <><Globe className="h-3.5 w-3.5" /><span>Web search</span></>}
+                  {searchMode === "deep" && <><Sparkles className="h-3.5 w-3.5" /><span>Deep research</span></>}
+                  {searchMode === "think" && <><Lightbulb className="h-3.5 w-3.5" /><span>Think longer</span></>}
+                  </div>
                   )}
-                </div>
-
-                <div className="flex items-center gap-1">
+                  </div>
+                  
+                  <div className="flex items-center gap-1">
                   <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground">
-                    <Mic className="h-4 w-4" />
+                  <Mic className="h-4 w-4" />
                   </Button>
                   <Button
                     size="icon"
@@ -1382,24 +1461,38 @@ export default function DashboardPage() {
                 )}
               </div>
               
-              {/* Show active mode indicator - persists until user closes it */}
-              {searchMode !== "none" && (
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-muted/50 text-foreground text-sm font-medium hover:bg-muted transition-colors">
-                  <button 
-                    onClick={() => setSearchMode("none")} 
-                    className="flex items-center justify-center hover:bg-muted-foreground/20 rounded-full p-0.5 transition-colors"
-                    aria-label="Remove mode"
+{/* Turbo Mode Toggle */}
+                  <button
+                  onClick={() => setTurboMode(!turboMode)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm font-medium transition-all ${
+                    turboMode 
+                      ? "border-yellow-500 bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-500/30" 
+                      : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                  title="Turbo Mode - Ultra-fast responses powered by Cerebras"
                   >
-                    <X className="h-3.5 w-3.5" />
+                  <Zap className={`h-3.5 w-3.5 ${turboMode ? "fill-yellow-500" : ""}`} />
+                  <span>Turbo</span>
+                  </button>
+
+                  {/* Show active mode indicator - persists until user closes it */}
+                  {searchMode !== "none" && (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-muted/50 text-foreground text-sm font-medium hover:bg-muted transition-colors">
+                  <button
+                  onClick={() => setSearchMode("none")}
+                  className="flex items-center justify-center hover:bg-muted-foreground/20 rounded-full p-0.5 transition-colors"
+                  aria-label="Remove mode"
+                  >
+                  <X className="h-3.5 w-3.5" />
                   </button>
                   {searchMode === "web" && <><Globe className="h-3.5 w-3.5" /><span>Web search</span></>}
                   {searchMode === "deep" && <><Sparkles className="h-3.5 w-3.5" /><span>Deep research</span></>}
                   {searchMode === "think" && <><Lightbulb className="h-3.5 w-3.5" /><span>Think longer</span></>}
-                </div>
-              )}
-              
-              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground">
-                <HandIcon />
+                  </div>
+                  )}
+                  
+                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground">
+                  <HandIcon />
               </Button>
               <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground">
                 <SettingsIcon />
