@@ -1208,23 +1208,29 @@ export default function DashboardPage() {
                           <span>Think longer</span>
                           {searchMode === "think" && <Check className="h-3 w-3 ml-auto text-primary" />}
                         </button>
+                        
+                        <div className="border-t border-border my-1" />
+                        
+                        <button 
+                          className={`w-full flex items-center gap-3 px-3 py-2 text-sm transition-colors text-left ${
+                            turboMode ? "bg-yellow-500/20 text-yellow-600 dark:text-yellow-400" : "hover:bg-muted"
+                          }`}
+                          onClick={() => {
+                            setTurboMode(!turboMode)
+                            if (!turboMode) {
+                              setSearchMode("none") // Clear other modes when enabling turbo
+                            }
+                            setPlusMenuOpen(false)
+                            textareaRef.current?.focus()
+                          }}
+                        >
+                          <Zap className={`h-4 w-4 ${turboMode ? "fill-yellow-500 text-yellow-500" : ""}`} />
+                          <span>Turbo mode</span>
+                          {turboMode && <Check className="h-3 w-3 ml-auto text-yellow-500" />}
+                        </button>
                       </div>
                     )}
                   </div>
-                  
-{/* Turbo Mode Toggle */}
-                  <button
-                  onClick={() => setTurboMode(!turboMode)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm font-medium transition-all ${
-                    turboMode 
-                      ? "border-yellow-500 bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-500/30" 
-                      : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
-                  }`}
-                  title="Turbo Mode - Ultra-fast responses powered by Cerebras"
-                  >
-                  <Zap className={`h-3.5 w-3.5 ${turboMode ? "fill-yellow-500" : ""}`} />
-                  <span>Turbo</span>
-                  </button>
 
                   {/* Show active mode indicator - persists until user closes it */}
                   {searchMode !== "none" && (
