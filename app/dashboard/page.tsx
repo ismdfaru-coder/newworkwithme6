@@ -23,6 +23,7 @@ import {
   ChevronDown,
   ChevronUp,
   Zap,
+  Image as ImageIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { MarkdownContent } from "@/components/markdown-content"
