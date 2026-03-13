@@ -24,6 +24,7 @@ import {
   ChevronUp,
   Zap,
   Image as ImageIcon,
+  BookOpen,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { MarkdownContent } from "@/components/markdown-content"
